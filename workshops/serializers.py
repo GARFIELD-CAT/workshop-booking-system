@@ -1,6 +1,7 @@
 from rest_framework import serializers
-from django.utils import timezone
-from .models import User, Workshop, Booking
+
+from .models import Booking, User, Workshop
+from .services import save_booking, update_workshop
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -24,14 +25,21 @@ class RegisterSerializer(serializers.ModelSerializer):
             password=validated_data['password'],
             role='user'  # По умолчанию обычный пользователь
         )
+
         return user
 
 
 class WorkshopSerializer(serializers.ModelSerializer):
     class Meta:
         model = Workshop
-        fields = '__all__'
+        fields = (
+            'id', 'title', 'description', 'date', 'capacity',
+            'created_at', 'updated_at',
+        )
         read_only_fields = ('id', 'created_at', 'updated_at')
+
+    def update(self, instance, validated_data):
+        return update_workshop(instance.pk, validated_data)
 
 
 class BookingSerializer(serializers.ModelSerializer):
@@ -47,21 +55,17 @@ class BookingSerializer(serializers.ModelSerializer):
         fields = ('id', 'user', 'workshop', 'workshop_id', 'created_at')
         read_only_fields = ('id', 'created_at', 'user')
 
-    def validate(self, data):
-        workshop = data['workshop']
-        user = self.context['request'].user
+    def create(self, validated_data):
+        return save_booking(
+            user=validated_data['user'],
+            workshop_id=validated_data['workshop'].pk,
+        )
 
-        # 1. Проверка даты: нельзя записаться на прошедший мастер-класс
-        if workshop.date < timezone.now():
-            raise serializers.ValidationError("Нельзя забронировать прошедший мастер-класс.")
+    def update(self, instance, validated_data):
+        workshop = validated_data.get('workshop')
 
-        # 2. Проверка дублирования
-        if Booking.objects.filter(user=user, workshop=workshop).exists():
-            raise serializers.ValidationError("Вы уже забронированы на этот мастер-класс.")
-
-        # 3. Проверка вместимости
-        current_bookings = Booking.objects.filter(workshop=workshop).count()
-        if current_bookings >= workshop.capacity:
-            raise serializers.ValidationError("Все места на мастер-класс заняты.")
-
-        return data
+        return save_booking(
+            user=self.context['request'].user,
+            workshop_id=workshop.pk if workshop is not None else None,
+            booking_id=instance.pk,
+        )
