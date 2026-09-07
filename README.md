@@ -8,7 +8,7 @@ Framework. Пользователь может зарегистрировать�
 ## Стек
 
 - Python 3.12+, Django 6.0, Django REST Framework.
-- PostgreSQL (в Docker — версия 16).
+- PostgreSQL 16.
 - Simple JWT: вход по email и паролю.
 - drf-spectacular: Swagger UI и ReDoc.
 - Postman: запросы и автотесты.
