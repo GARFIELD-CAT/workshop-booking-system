@@ -1,0 +1,2349 @@
+{
+  "info": {
+    "name": "Workshop Booking System",
+    "description": "Последовательный прогон REST API. Создайте администратора командой createsuperuser и заполните admin_email/admin_password в окружении. Каждый запуск создаёт двух обычных пользователей и три мастер-класса с динамическими датами. Мастер-классы и брони удаляются в конце; тестовые пользователи остаются. Все проверки выполняются локально.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 Регистрация пользователя",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/register/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{user_username}}\",\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\",\n  \"role\": \"admin\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (!pm.environment.get(\"admin_password\")) { throw new Error(\"Укажите admin_email и admin_password существующего администратора в окружении.\"); }",
+              "const run = Date.now().toString() + Math.floor(Math.random() * 1000000);",
+              "pm.collectionVariables.set(\"user_username\", \"student_\" + run);",
+              "pm.collectionVariables.set(\"user_email\", \"student_\" + run + \"@example.com\");",
+              "pm.collectionVariables.set(\"other_username\", \"other_\" + run);",
+              "pm.collectionVariables.set(\"other_email\", \"other_\" + run + \"@example.com\");",
+              "pm.collectionVariables.set(\"future_date\", new Date(Date.now() + 7 * 86400000).toISOString());",
+              "pm.collectionVariables.set(\"past_date\", new Date(Date.now() - 86400000).toISOString());"
+            ]
+          }
+        },
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"user_id\", pm.response.json().id);",
+              "pm.test(\"Роль user, пароль скрыт\", function () { const data = pm.response.json(); pm.expect(data.role).to.equal(\"user\"); pm.expect(data).not.to.have.property(\"password\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Повторная регистрация",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/register/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{user_username}}\",\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "03 Слишком короткий пароль",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/register/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"short_{{user_username}}\",\n  \"email\": \"short_{{user_email}}\",\n  \"password\": \"123\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 Неверный пароль при входе",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/token/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"WrongPassword!\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 401\", function () { pm.response.to.have.status(401); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "05 Вход пользователя",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/token/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{user_email}}\",\n  \"password\": \"{{user_password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"user_access\", pm.response.json().access);",
+              "pm.collectionVariables.set(\"user_refresh\", pm.response.json().refresh);",
+              "pm.test(\"Получены access и refresh\", function () { const data = pm.response.json(); pm.expect(data.access).to.be.a(\"string\"); pm.expect(data.refresh).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "06 Обновление токена",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/token/refresh/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"refresh\": \"{{user_refresh}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"user_access\", pm.response.json().access);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Регистрация второго пользователя",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/register/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"username\": \"{{other_username}}\",\n  \"email\": \"{{other_email}}\",\n  \"password\": \"{{user_password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"other_id\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "08 Вход второго пользователя",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/token/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{other_email}}\",\n  \"password\": \"{{user_password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"other_access\", pm.response.json().access);",
+              "pm.collectionVariables.set(\"other_refresh\", pm.response.json().refresh);",
+              "pm.test(\"Получены access и refresh\", function () { const data = pm.response.json(); pm.expect(data.access).to.be.a(\"string\"); pm.expect(data.refresh).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Вход администратора",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/token/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{admin_email}}\",\n  \"password\": \"{{admin_password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"admin_access\", pm.response.json().access);",
+              "pm.collectionVariables.set(\"admin_refresh\", pm.response.json().refresh);",
+              "pm.test(\"Получены access и refresh\", function () { const data = pm.response.json(); pm.expect(data.access).to.be.a(\"string\"); pm.expect(data.refresh).to.be.a(\"string\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "10 Публичный список мастер-классов",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"Есть список и пагинация\", function () { pm.expect(pm.response.json().results).to.be.an(\"array\"); pm.expect(pm.response.json().count).to.be.a(\"number\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Гость не создаёт мастер-классы",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Telegram-бот на Python\",\n  \"description\": \"Создание простого Telegram-бота и обработка сообщений\",\n  \"date\": \"{{future_date}}\",\n  \"capacity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 401\", function () { pm.response.to.have.status(401); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "12 Пользователь не создаёт мастер-классы",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Telegram-бот на Python\",\n  \"description\": \"Создание простого Telegram-бота и обработка сообщений\",\n  \"date\": \"{{future_date}}\",\n  \"capacity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 403\", function () { pm.response.to.have.status(403); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Администратор создаёт мастер-класс",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Telegram-бот на Python\",\n  \"description\": \"Создание простого Telegram-бота и обработка сообщений\",\n  \"date\": \"{{future_date}}\",\n  \"capacity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"workshop_id\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "14 Второй мастер-класс для переноса",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Подготовка резюме\",\n  \"description\": \"Создание резюме и разбор частых ошибок\",\n  \"date\": \"{{future_date}}\",\n  \"capacity\": 2\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"next_workshop_id\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "15 Прошедший мастер-класс для проверки записи",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Техника владения мячом в футболе\",\n  \"description\": \"Практика контроля мяча и основных футбольных приёмов\",\n  \"date\": \"{{past_date}}\",\n  \"capacity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"past_workshop_id\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "16 Публичные детали мастер-класса",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{workshop_id}}/",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"Есть описание и вместимость\", function () { const data = pm.response.json(); pm.expect(data.description).to.be.a(\"string\"); pm.expect(data.capacity).to.equal(1); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "17 Полное обновление мастер-класса",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Telegram-бот на Python для начинающих\",\n  \"description\": \"Создание первого Telegram-бота на Python\",\n  \"date\": \"{{future_date}}\",\n  \"capacity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "18 Частичное обновление мастер-класса",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"description\": \"Создание первой чашки\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Пользователю запрещён PUT мастер-класса",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Telegram-бот на Python\",\n  \"description\": \"Создание простого Telegram-бота и обработка сообщений\",\n  \"date\": \"{{future_date}}\",\n  \"capacity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 403\", function () { pm.response.to.have.status(403); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Пользователю запрещён PATCH мастер-класса",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Telegram-бот на Python\",\n  \"description\": \"Создание простого Telegram-бота и обработка сообщений\",\n  \"date\": \"{{future_date}}\",\n  \"capacity\": 1\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 403\", function () { pm.response.to.have.status(403); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Пользователю запрещён DELETE мастер-класса",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 403\", function () { pm.response.to.have.status(403); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "19 Гость не видит бронирования",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 401\", function () { pm.response.to.have.status(401); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "20 Гость не может записаться",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "noauth"
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 401\", function () { pm.response.to.have.status(401); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "21 Создание бронирования",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{workshop_id}}\",\n  \"user\": \"{{other_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"booking_id\", pm.response.json().id);",
+              "pm.test(\"Бронь принадлежит текущему пользователю\", function () { pm.expect(pm.response.json().user.id).to.equal(Number(pm.collectionVariables.get(\"user_id\"))); });",
+              "pm.test(\"Мастер-класс вложен, пароль скрыт\", function () { const data = pm.response.json(); pm.expect(data.workshop.id).to.equal(Number(pm.collectionVariables.get(\"workshop_id\"))); pm.expect(data.user).not.to.have.property(\"password\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "22 Список своих бронирований",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"В списке только своя бронь\", function () { const data = pm.response.json(); pm.expect(data.count).to.equal(1); pm.expect(data.results[0].id).to.equal(Number(pm.collectionVariables.get(\"booking_id\"))); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "23 Детали своей брони",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "24 Чужие бронирования не попадают в список",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{other_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"Список другого пользователя пуст\", function () { pm.expect(pm.response.json().count).to.equal(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Чужая бронь недоступна через GET",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{other_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Чужая бронь недоступна через PUT",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{other_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{next_workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Чужая бронь недоступна через PATCH",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{other_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{next_workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Чужая бронь недоступна через DELETE",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{other_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "25 Повторная бронь запрещена",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "26 Места закончились",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{other_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "27 Запись на прошедший мастер-класс запрещена",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{past_workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "28 Отсутствует workshop_id",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "29 Несуществующий мастер-класс",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": 2147483647\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "30 PUT с тем же мастер-классом",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "31 Пустой PATCH не ломает бронь",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "32 Перенос на прошедшую дату запрещён",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{past_workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "33 Нельзя уменьшить вместимость ниже числа броней",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"capacity\": 0\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "34 Перенос брони через PUT",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{next_workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"Мастер-класс изменился\", function () { pm.expect(pm.response.json().workshop.id).to.equal(Number(pm.collectionVariables.get(\"next_workshop_id\"))); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "35 Перенос брони через PATCH",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "36 Отмена брони",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 204\", function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "37 Отменённая бронь не найдена",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "38 Освободившееся место доступно другому пользователю",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{other_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"workshop_id\": \"{{workshop_id}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 201\", function () { pm.response.to.have.status(201); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.collectionVariables.set(\"other_booking_id\", pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "39 После отмены список пуст",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{user_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"Свои брони отсутствуют\", function () { pm.expect(pm.response.json().count).to.equal(0); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "40 Удаление мастер-класса администратором",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 204\", function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "41 Бронь удалена вместе с мастер-классом",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/bookings/{{other_booking_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{other_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 404\", function () { pm.response.to.have.status(404); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "42 Очистка второго мастер-класса",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{next_workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 204\", function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "43 Очистка прошедшего мастер-класса",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{past_workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 204\", function () { pm.response.to.have.status(204); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "44 Корень API",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "45 Схема OpenAPI",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/schema/?format=json",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"Схема содержит бронирования\", function () { pm.expect(pm.response.json().paths).to.have.property(\"/api/bookings/\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "46 Swagger UI",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/html"
+          }
+        ],
+        "url": "{{base_url}}/api/schema/swagger-ui/",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "47 ReDoc",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "text/html"
+          }
+        ],
+        "url": "{{base_url}}/api/schema/redoc/",
+        "auth": {
+          "type": "noauth"
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "user_username",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_username",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_email",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "future_date",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "past_date",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "workshop_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "next_workshop_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "past_workshop_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "booking_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_booking_id",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_access",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "user_refresh",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_access",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "other_refresh",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_access",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "admin_refresh",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
