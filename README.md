@@ -107,9 +107,6 @@ docker compose down
 
 API: [http://localhost:8000/api/](http://localhost:8000/api/).
 
-Проект использует PostgreSQL. Старый локальный `db.sqlite3` не используется;
-данные из него автоматически не переносятся.
-
 ## Демонстрационные данные
 
 При первом выполнении `python manage.py migrate` миграция создаёт четыре
