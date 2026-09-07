@@ -1,10 +1,12 @@
+import importlib
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier
 from types import SimpleNamespace
 
+from django.apps import apps
 from django.db import connection, connections
-from django.test import TransactionTestCase
+from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 from rest_framework.test import APIClient, APITestCase
@@ -13,9 +15,73 @@ from .models import Booking, User, Workshop
 from .serializers import BookingSerializer
 
 
+class DemoDataMigrationTests(TestCase):
+    """Проверяем начальные данные для чистой базы."""
+
+    def setUp(self):
+        Booking.objects.all().delete()
+        Workshop.objects.all().delete()
+        User.objects.all().delete()
+
+    def get_migration(self):
+        return importlib.import_module(
+            'workshops.migrations.0003_seed_demo_data',
+        )
+
+    def test_migration_creates_demo_data(self):
+        migration = self.get_migration()
+        migration.create_demo_data(apps, None)
+
+        admin = User.objects.get(username='admin')
+        self.assertEqual(admin.role, 'admin')
+        self.assertFalse(admin.is_staff)
+        self.assertFalse(admin.is_superuser)
+        self.assertTrue(admin.check_password('admin'))
+
+        user = User.objects.get(username='user')
+        user2 = User.objects.get(username='user2')
+        self.assertEqual(user.role, 'user')
+        self.assertEqual(user2.role, 'user')
+        self.assertTrue(user.check_password('user'))
+        self.assertTrue(user2.check_password('user2'))
+
+        self.assertEqual(Workshop.objects.count(), 4)
+        self.assertSetEqual(
+            set(Workshop.objects.values_list('title', flat=True)),
+            {
+                'Создание REST API на Django',
+                'Основы публичных выступлений',
+                'Мобильная фотография',
+                'Эффективное управление временем',
+            },
+        )
+        self.assertEqual(Booking.objects.count(), 4)
+        self.assertFalse(
+            Workshop.objects.filter(date__lte=timezone.now()).exists(),
+        )
+
+        for workshop in Workshop.objects.all():
+            self.assertLessEqual(workshop.bookings.count(), workshop.capacity)
+
+    def test_reverse_migration_deletes_demo_data(self):
+        migration = self.get_migration()
+        migration.create_demo_data(apps, None)
+        migration.delete_demo_data(apps, None)
+
+        self.assertFalse(
+            User.objects.filter(username__in=('admin', 'user', 'user2'))
+            .exists(),
+        )
+        self.assertFalse(Workshop.objects.exists())
+        self.assertFalse(Booking.objects.exists())
+
+
 class BookingAPITests(APITestCase):
     @classmethod
     def setUpTestData(cls):
+        Booking.objects.all().delete()
+        Workshop.objects.all().delete()
+        User.objects.all().delete()
         cls.password = 'studentPass'
         cls.user = User.objects.create_user(
             username='student', email='student@example.com',
@@ -269,6 +335,9 @@ class ConcurrentBookingTests(TransactionTestCase):
     """Проверяем настоящие одновременные запросы на PostgreSQL."""
 
     def setUp(self):
+        Booking.objects.all().delete()
+        Workshop.objects.all().delete()
+        User.objects.all().delete()
         self.workshop = Workshop.objects.create(
             title='Последнее место',
             description='Проверка одновременной записи',
