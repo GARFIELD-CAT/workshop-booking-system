@@ -1,0 +1,11 @@
+# В образ попадают только зависимости и код приложения.
+*
+!pyproject.toml
+!poetry.lock
+!manage.py
+!workshop_booking/
+!workshop_booking/**
+!workshops/
+!workshops/**
+**/__pycache__/
+**/*.py[cod]
