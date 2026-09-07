@@ -5,7 +5,7 @@ from threading import Barrier
 from types import SimpleNamespace
 
 from django.apps import apps
-from django.db import connection, connections
+from django.db import IntegrityError, connection, connections, transaction
 from django.test import TestCase, TransactionTestCase
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
@@ -177,6 +177,53 @@ class BookingAPITests(APITestCase):
         self.assertEqual(
             self.client.post('/api/workshops/', {}).status_code, 403,
         )
+
+    def test_admin_cannot_create_workshop_with_duplicate_title(self):
+        self.client.force_authenticate(self.admin)
+        response = self.client.post('/api/workshops/', {
+            'title': self.workshop.title,
+            'description': 'Другое описание',
+            'date': (timezone.now() + timedelta(days=21)).isoformat(),
+            'capacity': 5,
+        })
+
+        self.assertEqual(response.status_code, 400)
+        self.assertIn('title', response.data)
+        self.assertEqual(
+            Workshop.objects.filter(title=self.workshop.title).count(), 1,
+        )
+
+    def test_admin_cannot_update_workshop_to_duplicate_title(self):
+        self.client.force_authenticate(self.admin)
+        url = f'/api/workshops/{self.next_workshop.pk}/'
+        put_data = {
+            'title': self.workshop.title,
+            'description': self.next_workshop.description,
+            'date': self.next_workshop.date.isoformat(),
+            'capacity': self.next_workshop.capacity,
+        }
+
+        for method, data in (
+            ('put', put_data),
+            ('patch', {'title': self.workshop.title}),
+        ):
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(url, data)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn('title', response.data)
+
+        self.next_workshop.refresh_from_db()
+        self.assertEqual(self.next_workshop.title, 'Рисование')
+
+    def test_database_rejects_duplicate_workshop_title(self):
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                Workshop.objects.create(
+                    title=self.workshop.title,
+                    description='Другое описание',
+                    date=timezone.now() + timedelta(days=21),
+                    capacity=5,
+                )
 
     def test_create_booking_returns_workshop_and_current_user(self):
         self.client.force_authenticate(self.user)

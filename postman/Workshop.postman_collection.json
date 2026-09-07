@@ -571,6 +571,55 @@
       ]
     },
     {
+      "name": "Администратор не создаёт мастер-класс с повторным названием",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Telegram-бот на Python\",\n  \"description\": \"Другое описание\",\n  \"date\": \"{{future_date}}\",\n  \"capacity\": 5\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"Ошибка относится к названию\", function () { pm.expect(pm.response.json()).to.have.property(\"title\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
       "name": "14 Второй мастер-класс для переноса",
       "request": {
         "method": "POST",
@@ -772,7 +821,7 @@
         },
         "body": {
           "mode": "raw",
-          "raw": "{\n  \"description\": \"Создание первой чашки\"\n}",
+          "raw": "{\n  \"description\": \"Создание первого бота\"\n}",
           "options": {
             "raw": {
               "language": "json"
@@ -788,6 +837,55 @@
             "exec": [
               "pm.test(\"Код ответа 200\", function () { pm.response.to.have.status(200); });",
               "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "Нельзя переименовать мастер-класс в существующее название",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Accept",
+            "value": "application/json"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": "{{base_url}}/api/workshops/{{next_workshop_id}}/",
+        "auth": {
+          "type": "bearer",
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{admin_access}}",
+              "type": "string"
+            }
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"title\": \"Telegram-бот на Python для начинающих\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test(\"Код ответа 400\", function () { pm.response.to.have.status(400); });",
+              "pm.test(\"Ответ в JSON\", function () { pm.expect(pm.response.headers.get(\"Content-Type\")).to.include(\"json\"); });",
+              "pm.test(\"Ошибка относится к названию\", function () { pm.expect(pm.response.json()).to.have.property(\"title\"); });"
             ]
           }
         }
